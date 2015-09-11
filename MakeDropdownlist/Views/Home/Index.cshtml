@@ -1,0 +1,280 @@
+﻿<link href="~/Scripts/dhtmlxtree/dhtmlxtree.css" rel="stylesheet" />
+<script src="~/Scripts/dhtmlxtree/dhtmlxcommon.js"></script>
+<script src="~/Scripts/dhtmlxtree/dhtmlxtree.js"></script>
+<script src="~/Scripts/dhtmlxtree/dhtmlxtree_json.js"></script>
+
+<script type="text/javascript">
+    $(function () {
+        InitSearchTree();
+        $(".div-body img").click(function () {
+            var classname = $("#ModulesIcon").attr("class");
+            $("#ModulesIcon").removeClass(classname);
+            var url = $(this).attr("class");
+            $("#ModulesIcon").addClass(url);
+        })
+    });
+    function InitSearchTree() {
+        var classname = "";
+        var jsondata = "";
+        var url = '@Url.Action("GetCorpsAll/1", "Corps")';
+        $.ajax({
+            url: url,
+            type: 'post',
+            cache: false,
+            success: function (msg) {
+                //这里直接传的系列化好的Json全格式所以不用去转换
+                // var response = "{" + msg + "}";
+                // var _menu = eval("(" + response + ")");
+                // jsondata = _menu;
+                jsondata = msg;
+                searchTree = new dhtmlXTreeObject("treeboxbox_treeSearchInput", "100%", "100%", 0);
+                searchTree.setImagePath("Scripts/dhtmlxtree/imgs/csh_books/");
+                searchTree.enableDragAndDrop(true);
+                searchTree.setDragHandler(myDragHandler);
+                //节点选择时事件
+                searchTree.setOnClickHandler(onNodeSearchSelect);
+                searchTree.loadJSONObject(jsondata);
+            }
+        })
+        //节点选择事件时函数
+        function onNodeSearchSelect(nodeId) {
+            if (classname != "") {
+                $("#ModulesIcon").removeClass(classname);
+            }
+            var urlnode = '@Url.Action("GetCorpsOne", "Corps")/' + nodeId;
+            //获取选择的节点
+            $("#CorpsCheckText").val(searchTree.getItemText(nodeId));
+            $("#CorpsCheck").val(nodeId);
+
+        }
+        function myDragHandler(idFrom, idTo) {
+            EditTree(5, idTo);
+            return true;
+        }
+    }
+
+    //////////////
+    //添加操作
+    //type 1=新加节点 2=新加子节点 3=修改节点 4=删除节点 5=修改父节点
+    function EditTree(type, pid) {
+        var strVal = "";
+        var newName = $("#txtNewNameCorp").val();
+        var newChildName = $("#txtChildNameCorp").val();
+        var oldName = $("#txtOldNameCorp").val();
+        var corpId = searchTree.getSelectedItemId();
+
+        var d = new Date();
+        if (type == 4) //删除节点
+        {
+            if (!confirm("是否删除节点：" + searchTree.getSelectedItemText() + "?")) {
+                return false;
+            }
+        }
+        if (type != 5) {
+            if (corpId != "") {
+                pid = searchTree.getParentId(corpId);
+            }
+        }
+        if (type == 2) {
+            pid = corpId;
+        }
+        if (type == 1) {
+            strVal = newName;
+        } else if (type == 2) {
+            strVal = newChildName;
+        } else if (type == 3) {
+            strVal = oldName;
+        } else if (type == 5) {
+            strVal = searchTree.getSelectedItemText();
+        }
+        var EditUrl = '@Url.Action("EditCorps", "Corps")';
+        //调用ajax更新数据 encodeURI(strVal)
+        $.ajax({
+            type: "POST",
+            url: EditUrl,
+            data: { Type: type, ID: corpId, Name: escape(strVal), ParentId: pid },
+            success: function (result, value) {
+                //回调函数，result，返回值
+                $.messager.show(0, result, 2000);
+                if (type == 1) //新加节点
+                {
+                    searchTree.insertNewNext(corpId, result, newName, 0, 0, 0, 0, 'SELECT'); fixImage(d.valueOf());
+                }
+                else if (type == 2) //新加子节点
+                {
+                    searchTree.insertNewItem(corpId, result, newChildName, 0, 0, 0, 0, 'SELECT'); fixImage(d.valueOf());
+                }
+            },
+            error: function (date) {
+                alert(date.responseText);
+            }
+        });
+        if (type == 3) //修改节点
+        {
+            searchTree.setItemText(corpId, oldName);
+        }
+        else if (type == 4) //删除节点
+        {
+            searchTree.deleteItem(corpId, true);
+        }
+    }
+    function fixImage(id) {
+        switch (searchTree.getLevel(id)) {
+            case 1:
+                searchTree.setItemImage2(id, 'books_close.gif', 'tombs.gif', 'tombs.gif');
+                break;
+            case 2:
+                searchTree.setItemImage2(id, 'book.gif', 'books_open.gif', 'books_close.gif');
+                break;
+            case 3:
+                searchTree.setItemImage2(id, 'book.gif', 'books_open.gif', 'book.gif');
+                break;
+            default:
+                searchTree.setItemImage2(id, 'book_titel.gif', 'book_titel.gif', 'book_titel.gif');
+                break;
+        }
+    }
+
+
+
+    function changeBegin(a) {
+        if (a == 1) {
+            // $("#hideDiv").show();
+            showMenu();
+            $("#stateHide").val("open");
+        }
+        else {
+            if ($("#CorpsCheck").val().length == 0) {
+                alert("请选择单位");
+                return false;
+            }
+            //$("#hideDiv").hide();
+            // $("#hideDivp").fadeOut("slow");
+            hideMenu();
+            $("#stateHide").val("hide");
+        }
+    }
+
+
+    //鼠标点击隐藏
+    function showMenu() {
+        $("#hideDiv").show();
+        $("body").bind("mousedown", onBodyDown);
+    }
+    function hideMenu() {
+        $("#hideDiv").fadeOut("fast");
+        $("body").unbind("mousedown", onBodyDown);
+    }
+    //处理鼠标点击事件
+    function onBodyDown(event) {
+        if (!(event.target.id == "CorpsCheckText" || event.target.id == "hideDiv" || $(event.target).parents("#hideDiv").length > 0)) {
+            hideMenu();
+        }
+    }
+
+    //发送站内消息
+    function SendMessage() {
+        var UserIds = "";
+        $(".ck").each(function () {
+            if (this.checked) {
+                UserIds = UserIds + $(this).attr("id") + ",";
+            }
+        })
+        if (UserIds.trim() != "") {
+            if (confirm("确定向所选用户发送站内消息吗？？")) {
+                UserIds = UserIds.substring(0, UserIds.length - 1);
+                var UserName = "";
+                $.ajax({
+                    url: "@Url.Action("GetUserName", "SmallMessage")",
+                    type: "post",
+                    data: { "UserIds": UserIds },
+                    success: function (data) {
+                        $("#userName").html(data);
+                        $("#SendMessage").dialog({
+                            resizable: false,
+                            modal: true,
+                            width: 600,
+                            height: 350,
+                            buttons: {
+                                '确认': function () {
+                                    if ($("#MessageContent").val() != "") {
+
+                                        $.ajax({
+                                            url: "@Url.Action("Add", "SmallMessage")",
+                                            data: { "str": UserIds, "Content": $("#MessageContent").val() },
+                                            success: function (data) {
+                                                if (data != false) {
+                                                    alert("信息发送成功");
+                                                    $("#SendMessage").dialog("close");
+                                                }
+                                                else {
+                                                    alert("信息发送成功");
+                                                    $("#SendMessage").dialog("close");
+                                                }
+                                            }
+                                        })
+                                    }
+                                    else {
+                                        alert("请输入要发送的内容。");
+                                        $("#MessageContent").focus();
+                                    }
+                                }, '取消': function () {
+                                    $("#SendMessage").dialog("close");
+                                }
+                            }
+                        })
+                    }
+                })
+            }
+        }
+        else {
+            alert("请勾选要发送信息的用户。");
+        }
+    }
+
+
+</script>
+
+
+<style type="text/css">
+    #hideDiv {
+        background: #EEE;
+        border: 1px solid #666;
+        float: left;
+        position: absolute;
+        z-index: 3;
+        display: none;
+    }
+
+    #main {
+    }
+</style>
+
+
+
+
+
+<div class="jumbotron">
+</div>
+<div class="row">
+    <div class="col-md-4">
+        <div id="main">
+            <input type="hidden" value="hide" id="stateHide" style="display: none" />
+            <input type="hidden" id="CorpsCheck" style="display: none" />
+            <input readonly="readonly" type="text" id="CorpsCheckText" style="width: 150px; height: auto; border: 1px solid #a8a8a8" onclick="changeBegin(1)" />
+
+            <div>
+                <div id="hideDiv">
+                    <div id="treeboxbox_treeSearchInput" style="margin-top: 2px">
+                    </div>
+                    <input type="button" class="btnSearch" style="float: right" value="确定" onclick="changeBegin(2)">
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <div class="col-md-4">
+ </div>
+    <div class="col-md-4">
+ </div>
+</div>
